@@ -1,0 +1,194 @@
+%% Particle Swarm Optimization
+% Jonas Müller Gonçalves
+clear all;clc;
+% rng(2);
+nrodadas = 10;
+
+for rodar = 1:nrodadas
+%% Inicialização das Variáveis
+population = 10; npart=population;   % População total de Partículas
+variables = 1; nvar=variables;     % Variáveis de Projeto
+lambda1 = 2;    % Lambda 1
+lambda2 = 2;    % Lambda 2
+omega = 0.5;    % Propriedade de Inércia
+
+dominio = [6.426e-5 0.045238];%.*ones(nvar,1); % Domínio das nvar variaveis
+    
+tol = 1e-8;     % Diferença entre o xgbest anterior e o novo xgbest - erro
+erro_contador = 0;  % contador de iteracoes com o verificador de erro ativado
+nerros = 600;   % Número máximo de iterações com o erro ativado
+
+%% Inicialização dos Vetores de Projeto
+% Distribuindo as Partículas
+for icol = 1:nvar
+    for ivar = 1:npart
+        position(ivar,icol) = abs(dominio(icol,1)+rand*(dominio(icol,1)-dominio(icol,2)));
+    end
+end
+ct1=1;ct2=1;    % contadores auxiliares
+
+% Checando se o chute inicial está dentro do domínio
+for ipart=1:npart
+    for ivariab=1:nvar
+        if position(ipart,ivariab) < dominio(ivariab,1)
+            fora_dominio_menor(ct1,ivariab) = position(ipart,ivariab); ct1=ct1+1;
+            position(ipart,ivariab) = dominio(ivariab,1);  % Induz o retorno da partícula que passou
+        elseif position(ipart,ivariab) >  dominio(ivariab,2)
+            fora_dominio_maior(ct2,ivariab) = position(ipart,ivariab); ct2=ct2+1;
+            position(ipart,ivariab) = dominio(ivariab,2);   % Induz o retorno da partícula que passou
+        end
+    end
+end
+
+% Definindo as Velocidades Iniciais
+velocity = zeros(npart,nvar);   % inicializa as velocidades
+
+%% Cálculo Inicial da Melhor Partícula
+for ires=1:size(position,1)
+    [node_disp,Tensoes,Massa] = FEM(position(ires,:));    % Define os valores de f(x,y)
+    [fp1,fp2] = Verifica(node_disp,Tensoes); % Verifica as condições de contorno
+    
+    resultados(ires,1) = Massa * fp1 * fp2;
+end
+
+[resg,ord]=sort(resultados);    % Ordena os valores do menor para o maior
+
+for ixgbest=1:nvar
+    xgbest(ixgbest) = [position(ord(1,1),ixgbest)];   % Define o melhor global como o primeiro do vetor ordenado
+end
+melhorglobal=xgbest;    % Cria um valor armazenado do melhor global
+ordglobal = ord(1,1);   % Replica qual a linha do melhor global
+
+xlbest = 0.04523.*ones(npart,nvar); % Inicia Vetor de melhor local
+
+% Variáveis Auxiliares
+parada=0; iter=0; pos_old=position; v_old=velocity; cont1=1; cont2=1;
+
+
+%% Otimização
+while parada == 0
+    iter = iter+1; % Atualiza o Contador de Iterações
+    r1=rand; r2=rand; % R's aleatórios
+    
+    % Cálculo das Novas Velocidades e Posições de cada partícula
+    for i=1:npart
+        for j=1:nvar
+            v(i,j) = omega*v_old(i)+lambda1*r1*(xlbest(i,j) - pos_old(i,j)) + lambda2*r2*(xgbest(j) - pos_old(i,j));
+            pos(i,j) = abs(pos_old(i,j) + v(i,j));
+        end
+    end
+    cont1=1;cont2=1;    % Contadores Auxiliares
+    
+    % Verificação do Domínio das Novas Partículas
+    for ipart=1:npart
+        for ivariab=1:nvar
+            if pos(ipart,ivariab) < dominio(ivariab,1)
+                fora_dominio_menor(ct1,ivariab) = pos(ipart,ivariab); 
+                ct1=ct1+1;    % armazena os valores que foram menores que o dominio (somente para conferencia)
+                pos(ipart,ivariab) = dominio(ivariab,1);  % Induz o retorno da partícula que passou
+            elseif pos(ipart,ivariab) >  dominio(ivariab,2)
+                fora_dominio_maior(ct2,ivariab) = pos(ipart,ivariab); 
+                ct2=ct2+1;    % armazena os valores que foram maiores que o dominio (somente para conferencia)
+                pos(ipart,ivariab) = dominio(ivariab,2);  % Induz o retorno da partícula que passou
+            end
+        end
+    end
+    
+% Atualiza o valor de xlbest
+for j=1:nvar
+    for i=1:npart
+        [node_disp,Tensoes,fxlbest2] = FEM(xlbest(i,:));
+        [fp1,fp2] = Verifica(node_disp,Tensoes);
+        fxlbest = fxlbest2 * fp1 * fp2;
+        
+        [node_disp,Tensoes,fposi2] = FEM(pos(i,:));
+        [fp1,fp2] = Verifica(node_disp,Tensoes);
+        fposi = fposi2 * fp1 * fp2;
+            
+        if fxlbest > fposi   % Define o melhor global como o primeiro do vetor ordenado
+            xlbest(i,:) = pos(i,:);
+        else
+            
+        end
+    end
+end
+
+% Armazena os resultados de f(xlbest)
+    for ilc=1:npart
+        [node_disp,Tensoes,fxlbest3] = FEM(xlbest(ilc,:));
+        [fp1,fp2] = Verifica(node_disp,Tensoes);
+        fxlbest_aux = fxlbest3 * fp1 * fp2;
+        resultados_loc(ilc,1) = fxlbest_aux;
+    end
+    
+    % Ordena os valores de f(xlbest) do menor para o maior
+    [rloc,iloc] = sort(resultados_loc);
+    
+    % Armazena o melhor x local
+    for imelhorl=1:nvar
+        melhorlocal(imelhorl) = [xlbest(iloc(1),imelhorl)];
+    end
+    
+    [node_disp,Tensoes,fmelhorglobal2] = FEM(melhorglobal(1,:));
+    [fp1,fp2] = Verifica(node_disp,Tensoes);
+    fmelhorglobal = fmelhorglobal2 * fp1 * fp2;
+    
+    [node_disp,Tensoes,fmelhorlocal2] = FEM(melhorlocal(1,:));
+    [fp1,fp2] = Verifica(node_disp,Tensoes);
+    fmelhorlocal = fmelhorlocal2 * fp1 * fp2;
+
+    % Confere se o melhor x local é melhor que o melhor x global
+    if fmelhorglobal > fmelhorlocal
+        melhorglobal(1,:) = melhorlocal(1,:);
+    end
+    
+    MASSAS(rodar,1) = fmelhorglobal;
+
+    
+    [node_disp,Tensoes,fxgbest2] = FEM(xgbest(1,:));
+    [fp1,fp2] = Verifica(node_disp,Tensoes);
+    fxgbest = fxgbest2 * fp1 * fp2;
+   
+    melhor_disp = node_disp;
+    melhor_tensao = Tensoes;    
+    melhor_massa = fxgbest;
+    melhor_area = xgbest;
+    
+    erro = fxgbest - fmelhorglobal;   % Verifica o erro
+    xgbest = melhorglobal;    % Atualiza o xgbest 
+    v_old = v;  % Atribui a velocidade antiga como a nova velocidade calculada
+    pos_old = pos;  % Atribui a posição antiga como a nova posição calculada (já com o domínio verificado)
+    melhores(iter,:) = melhorglobal; % Armazena todos melhores globais
+    
+    % Condição de Parada
+    if erro<=tol % se o erro calculado é menor que a tolerancia, atualiza o contador
+        erro_contador = erro_contador+1;
+        if erro_contador>nerros % se o contador atinge o numero maximo de iteracoes consecutivas com erro<=tol
+            parada=1;
+            
+        end
+    else 
+        erro_contador=0;
+    end
+    
+end
+end
+%% Pós Processamento
+scatter(1:nrodadas,MASSAS);
+
+% for ires=1:iter
+%     [~,~,fmelhor] = FEM(melhores(ires,:));
+%     fmelhores(ires,1) = fmelhor;   % Define os valores de f(x,y)
+% end
+
+% figure(1)
+% xx=dominio(1,1):.2:dominio(1,2);
+% yy=dominio(2,1):.2:dominio(2,2);
+% [X,Y]=meshgrid(xx,yy);
+% ff=sin(Y).*exp((1-cos(X)).^2)+cos(X).*exp((1-sin(Y)).^2)+(X-Y).^2;
+% ff=100*(Y-X.^2).^2+(1-X).^2;
+% surf(X,Y,ff); hold on;
+% scatter3(melhores(:,1),melhores(:,2),fmelhores(:,1),'r','linewidth',1.4);hold on;
+
+% figure(2);
+% scatter(1:iter,fmelhores(:,1));hold on;xlabel('Iteração');ylabel('F Objetivo');grid minor;
